@@ -11,7 +11,6 @@ const DATABASE_URL = process.env.DATABASE_URL;
 
 // ==============================
 // TELEGRAM BOT
-// 不使用 polling，避免 409 Conflict
 // ==============================
 
 const bot = new TelegramBot(BOT_TOKEN, {
@@ -45,7 +44,7 @@ const webhookPath =
 const webhookUrl =
   renderUrl + webhookPath;
 
-// 可以使用 GIVE 1 SPIN 的客服
+// 客服 Telegram ID
 const ADMINS = [
   8780423196,
   8551800786,
@@ -152,12 +151,9 @@ app.post("/spin/:id", async (req, res) => {
     const result = await pool.query(
       `
       UPDATE customer_spins
-
       SET spins = spins - 1
-
       WHERE telegram_id = $1
       AND spins > 0
-
       RETURNING spins
       `,
       [req.params.id]
@@ -188,8 +184,6 @@ app.post("/spin/:id", async (req, res) => {
 
 // ==============================
 // INLINE MODE
-// 客服输入：
-// @UwinLuckyWheelBot spin
 // ==============================
 
 bot.on("inline_query", async (query) => {
@@ -202,7 +196,6 @@ bot.on("inline_query", async (query) => {
   try {
     const adminId = query.from.id;
 
-    // 只有指定客服可以使用
     if (!ADMINS.includes(adminId)) {
       await bot.answerInlineQuery(
         query.id,
@@ -293,8 +286,7 @@ bot.on("inline_query", async (query) => {
 });
 
 // ==============================
-// /START
-// 同时处理 CLAIM 1 SPIN
+// /START + CLAIM
 // ==============================
 
 bot.onText(
@@ -304,10 +296,6 @@ bot.onText(
     const startParam = match[1];
 
     try {
-      // ==========================
-      // CLAIM 1 SPIN
-      // ==========================
-
       if (
         startParam &&
         startParam.startsWith("spin_")
@@ -341,7 +329,6 @@ bot.onText(
               ]
             );
 
-          // 已经有人领取过
           if (claim.rows.length === 0) {
             await client.query(
               "ROLLBACK"
@@ -355,7 +342,6 @@ bot.onText(
             return;
           }
 
-          // 顾客 +1 SPIN
           const result =
             await client.query(
               `
@@ -419,10 +405,6 @@ bot.onText(
         }
       }
 
-      // ==========================
-      // NORMAL /START
-      // ==========================
-
       const result =
         await pool.query(
           `
@@ -468,8 +450,7 @@ bot.onText(
 );
 
 // ==============================
-// /ADD
-// 保留旧方式备用
+// /ADD BACKUP
 // ==============================
 
 bot.onText(
@@ -560,7 +541,45 @@ app.post(
 );
 
 // ==============================
-// RENDER HEALTH CHECK
+// DEBUG BOT
+// 检查 Telegram 是否真的开启 Inline
+// ==============================
+
+app.get(
+  "/debug-bot",
+  async (req, res) => {
+    try {
+      const response =
+        await fetch(
+          `https://api.telegram.org/bot${BOT_TOKEN}/getMe`
+        );
+
+      const data =
+        await response.json();
+
+      res.json({
+        ok: data.ok,
+
+        username:
+          data.result?.username,
+
+        supports_inline_queries:
+          data.result
+            ?.supports_inline_queries
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json({
+          error:
+            String(error)
+        });
+    }
+  }
+);
+
+// ==============================
+// HEALTH CHECK
 // ==============================
 
 app.get("/", (req, res) => {
@@ -581,11 +600,8 @@ app.listen(
     );
 
     try {
-      // 1. Database
       await initDatabase();
 
-      // 2. 直接使用 Telegram 官方 API
-      // 设置 webhook + inline_query
       const webhookResponse =
         await fetch(
           `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`,
@@ -627,7 +643,6 @@ app.listen(
         );
       }
 
-      // 3. 再确认 Telegram 实际保存了什么
       const infoResponse =
         await fetch(
           `https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`

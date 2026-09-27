@@ -1,259 +1,471 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>UWIN Lucky Wheel</title>
+  <meta charset="UTF-8">
 
-<style>
-* {
-  box-sizing: border-box;
-}
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  font-family: Arial, sans-serif;
-  background:
-    radial-gradient(circle at top, #ff9b32 0%, #c54d0a 32%, #441305 72%, #160602 100%);
-  color: white;
-  text-align: center;
-  overflow-x: hidden;
-}
+  <title>UWIN Lucky Wheel</title>
 
-.container {
-  width: 100%;
-  max-width: 480px;
-  margin: auto;
-  padding: 28px 16px 40px;
-}
+  <style>
+    * {
+      box-sizing: border-box;
+    }
 
-.logo {
-  font-size: 38px;
-  font-weight: 900;
-  letter-spacing: 2px;
-}
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
 
-.logo span {
-  color: #ffd34e;
-}
+      background:
+        radial-gradient(
+          circle at top,
+          #ff9b32 0%,
+          #e85b10 38%,
+          #9f1c08 72%,
+          #570800 100%
+        );
 
-.subtitle {
-  margin-top: 4px;
-  color: #ffe6bd;
-  font-weight: bold;
-  letter-spacing: 3px;
-}
+      color: white;
+      text-align: center;
+      overflow-x: hidden;
+    }
 
-.title {
-  margin: 22px 0 4px;
-  font-size: 27px;
-  font-weight: 900;
-}
+    .container {
+      width: 100%;
+      max-width: 480px;
+      margin: auto;
+      padding: 28px 16px 40px;
+    }
 
-.small {
-  color: #ffdba4;
-  font-size: 14px;
-}
+    .logo {
+      font-size: 38px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      margin-top: 4px;
+      color: white;
+    }
 
-.wheel-wrap {
-  position: relative;
-  width: min(88vw, 390px);
-  height: min(88vw, 390px);
-  margin: 35px auto 25px;
-}
+    .logo span {
+      color: #ffd34e;
+    }
 
-.pointer {
-  position: absolute;
-  z-index: 20;
-  top: -18px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 0;
-  height: 0;
-  border-left: 20px solid transparent;
-  border-right: 20px solid transparent;
-  border-top: 42px solid #fff3b0;
-  filter: drop-shadow(0 4px 3px rgba(0,0,0,.4));
-}
+    .subtitle {
+      margin-top: 8px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #fff4d7;
+    }
 
-.wheel {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  border: 9px solid #ffd36a;
-  box-shadow:
-    0 0 0 6px #8e3005,
-    0 10px 35px rgba(0,0,0,.5),
-    0 0 28px rgba(255,179,43,.5);
-  position: relative;
-  overflow: hidden;
-  transition: transform 5.2s cubic-bezier(.12,.72,.12,1);
-  background:
-    conic-gradient(
-      #ffb52e 0deg 45deg,
-      #e84d16 45deg 90deg,
-      #ffd15a 90deg 135deg,
-      #d83a13 135deg 180deg,
-      #ff9f1c 180deg 225deg,
-      #c72c0c 225deg 270deg,
-      #ffc94a 270deg 315deg,
-      #ef6218 315deg 360deg
-    );
-}
+    .balance {
+      margin: 14px auto 18px;
+      padding: 10px 18px;
 
-.label {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  left: 0;
-  top: 0;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-}
+      display: inline-block;
 
-.label span {
-  position: absolute;
-  top: 11%;
-  font-size: 18px;
-  font-weight: 900;
-  text-shadow: 0 2px 3px rgba(0,0,0,.65);
-}
+      border-radius: 20px;
 
-.spin-center {
-  position: absolute;
-  z-index: 10;
-  width: 94px;
-  height: 94px;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%,-50%);
-  border-radius: 50%;
-  background: linear-gradient(#fff5b7,#ffb31f);
-  border: 7px solid #8d2d04;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #8b2700;
-  font-weight: 900;
-  font-size: 21px;
-  box-shadow: 0 5px 14px rgba(0,0,0,.45);
-}
+      background: rgba(
+        0,
+        0,
+        0,
+        0.22
+      );
 
-button {
-  width: min(330px, 90%);
-  border: 0;
-  border-radius: 16px;
-  padding: 17px 20px;
-  font-size: 21px;
-  font-weight: 900;
-  color: #7b2500;
-  background: linear-gradient(180deg,#fff2a5,#ffb52b);
-  box-shadow: 0 7px 0 #9b3906, 0 12px 22px rgba(0,0,0,.3);
-  cursor: pointer;
-}
+      font-size: 16px;
+      font-weight: bold;
+    }
 
-button:active {
-  transform: translateY(4px);
-  box-shadow: 0 3px 0 #9b3906;
-}
+    .wheel-area {
+      position: relative;
 
-button:disabled {
-  opacity: .65;
-}
+      width: 330px;
+      height: 330px;
 
-.result {
-  min-height: 88px;
-  margin: 28px auto 0;
-  max-width: 390px;
-  padding: 18px;
-  border: 2px solid rgba(255,215,116,.5);
-  border-radius: 18px;
-  background: rgba(63,14,0,.5);
-}
+      margin: 22px auto;
+    }
 
-.result-title {
-  font-size: 15px;
-  color: #ffd88d;
-}
+    .pointer {
+      position: absolute;
 
-.prize {
-  margin-top: 6px;
-  font-size: 34px;
-  font-weight: 900;
-  color: #fff2a5;
-}
+      top: -17px;
+      left: 50%;
 
-.note {
-  margin-top: 22px;
-  color: #ffd9aa;
-  font-size: 12px;
-}
-</style>
+      transform:
+        translateX(-50%);
+
+      width: 0;
+      height: 0;
+
+      border-left:
+        19px solid transparent;
+
+      border-right:
+        19px solid transparent;
+
+      border-top:
+        39px solid #ffe46b;
+
+      z-index: 20;
+
+      filter:
+        drop-shadow(
+          0 3px 3px
+          rgba(0,0,0,0.4)
+        );
+    }
+
+    .wheel {
+      width: 330px;
+      height: 330px;
+
+      border-radius: 50%;
+
+      border:
+        10px solid #ffd34e;
+
+      box-shadow:
+        0 8px 25px
+        rgba(0,0,0,0.38);
+
+      position: relative;
+
+      overflow: hidden;
+
+      transition:
+        transform 5.4s
+        cubic-bezier(
+          0.12,
+          0.7,
+          0.12,
+          1
+        );
+
+      background:
+        conic-gradient(
+          #f44336 0deg 45deg,
+          #ff9800 45deg 90deg,
+          #e91e63 90deg 135deg,
+          #9c27b0 135deg 180deg,
+          #ff5722 180deg 225deg,
+          #ffc107 225deg 270deg,
+          #d32f2f 270deg 315deg,
+          #ff7043 315deg 360deg
+        );
+    }
+
+    .wheel::after {
+      content: "";
+
+      position: absolute;
+
+      width: 76px;
+      height: 76px;
+
+      left: 50%;
+      top: 50%;
+
+      transform:
+        translate(
+          -50%,
+          -50%
+        );
+
+      background:
+        #ffd34e;
+
+      border:
+        7px solid white;
+
+      border-radius: 50%;
+
+      box-shadow:
+        0 4px 10px
+        rgba(0,0,0,0.3);
+
+      z-index: 5;
+    }
+
+    .center-text {
+      position: absolute;
+
+      left: 50%;
+      top: 50%;
+
+      transform:
+        translate(
+          -50%,
+          -50%
+        );
+
+      z-index: 10;
+
+      font-weight: 900;
+      font-size: 17px;
+
+      color: #9a2408;
+    }
+
+    .label {
+      position: absolute;
+
+      left: 50%;
+      top: 50%;
+
+      width: 52px;
+
+      margin-left: -26px;
+      margin-top: -14px;
+
+      transform-origin:
+        26px 14px;
+
+      font-size: 18px;
+      font-weight: 900;
+
+      text-shadow:
+        0 2px 2px
+        rgba(0,0,0,0.45);
+
+      z-index: 4;
+    }
+
+    .l1 {
+      transform:
+        rotate(22.5deg)
+        translateY(-125px)
+        rotate(-22.5deg);
+    }
+
+    .l2 {
+      transform:
+        rotate(67.5deg)
+        translateY(-125px)
+        rotate(-67.5deg);
+    }
+
+    .l3 {
+      transform:
+        rotate(112.5deg)
+        translateY(-125px)
+        rotate(-112.5deg);
+    }
+
+    .l4 {
+      transform:
+        rotate(157.5deg)
+        translateY(-125px)
+        rotate(-157.5deg);
+    }
+
+    .l5 {
+      transform:
+        rotate(202.5deg)
+        translateY(-125px)
+        rotate(-202.5deg);
+    }
+
+    .l6 {
+      transform:
+        rotate(247.5deg)
+        translateY(-125px)
+        rotate(-247.5deg);
+    }
+
+    .l7 {
+      transform:
+        rotate(292.5deg)
+        translateY(-125px)
+        rotate(-292.5deg);
+    }
+
+    .l8 {
+      transform:
+        rotate(337.5deg)
+        translateY(-125px)
+        rotate(-337.5deg);
+    }
+
+    .spin-button {
+      width: 88%;
+      max-width: 360px;
+
+      border: none;
+      border-radius: 16px;
+
+      padding: 17px 20px;
+
+      font-size: 22px;
+      font-weight: 900;
+
+      color: #7e1d00;
+
+      background:
+        linear-gradient(
+          180deg,
+          #ffe76d,
+          #ffc928
+        );
+
+      box-shadow:
+        0 6px 0 #d89c00,
+        0 10px 18px
+        rgba(0,0,0,0.28);
+
+      cursor: pointer;
+    }
+
+    .spin-button:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+
+    .result-box {
+      margin:
+        28px auto 0;
+
+      width: 92%;
+
+      min-height: 110px;
+
+      padding: 18px;
+
+      border-radius: 18px;
+
+      background:
+        rgba(
+          255,
+          255,
+          255,
+          0.15
+        );
+
+      border:
+        1px solid
+        rgba(
+          255,
+          255,
+          255,
+          0.25
+        );
+    }
+
+    .result-title {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .prize {
+      margin-top: 7px;
+
+      font-size: 36px;
+      font-weight: 900;
+
+      color: #ffe766;
+    }
+
+    .note {
+      margin-top: 20px;
+      font-size: 13px;
+      color: #ffe6d6;
+      line-height: 1.5;
+    }
+  </style>
 </head>
 
 <body>
 
 <div class="container">
 
-  <div class="logo">U<span>WIN</span></div>
-  <div class="subtitle">LUCKY WHEEL</div>
+  <div class="logo">
+    UWIN <span>LUCKY</span> WHEEL
+  </div>
 
-  <div class="title">🎡 SPIN & WIN 🎡</div>
-  <div class="small">Tekan SPIN untuk cuba nasib anda!</div>
+  <div class="subtitle">
+    🎡 Cuba nasib anda!
+  </div>
 
-  <div class="wheel-wrap">
+  <div
+    class="balance"
+    id="balance"
+  >
+    Baki SPIN: ...
+  </div>
+
+  <div class="wheel-area">
 
     <div class="pointer"></div>
 
-    <div class="wheel" id="wheel">
+    <div
+      class="wheel"
+      id="wheel"
+    >
 
-      <div class="label" style="transform:rotate(22.5deg)">
-        <span>10%</span>
+      <div class="label l1">
+        10%
       </div>
 
-      <div class="label" style="transform:rotate(67.5deg)">
-        <span>20%</span>
+      <div class="label l2">
+        20%
       </div>
 
-      <div class="label" style="transform:rotate(112.5deg)">
-        <span>30%</span>
+      <div class="label l3">
+        30%
       </div>
 
-      <div class="label" style="transform:rotate(157.5deg)">
-        <span>40%</span>
+      <div class="label l4">
+        40%
       </div>
 
-      <div class="label" style="transform:rotate(202.5deg)">
-        <span>RM3</span>
+      <div class="label l5">
+        RM3
       </div>
 
-      <div class="label" style="transform:rotate(247.5deg)">
-        <span>RM5</span>
+      <div class="label l6">
+        RM5
       </div>
 
-      <div class="label" style="transform:rotate(292.5deg)">
-        <span>RM7</span>
+      <div class="label l7">
+        RM7
       </div>
 
-      <div class="label" style="transform:rotate(337.5deg)">
-        <span>RM9</span>
+      <div class="label l8">
+        RM9
+      </div>
+
+      <div class="center-text">
+        UWIN
       </div>
 
     </div>
 
-    <div class="spin-center">UWIN</div>
-
   </div>
 
-  <button id="spinButton" onclick="spinWheel()">
+  <button
+    class="spin-button"
+    id="spinButton"
+    onclick="spinWheel()"
+  >
     🎡 SPIN SEKARANG
   </button>
 
-  <div class="result" id="result">
-    <div class="result-title">HADIAH ANDA</div>
-    <div class="prize">?</div>
+  <div
+    class="result-box"
+    id="result"
+  >
+
+    <div class="result-title">
+      HADIAH ANDA
+    </div>
+
+    <div class="prize">
+      -
+    </div>
+
   </div>
 
   <div class="note">
@@ -262,115 +474,438 @@ button:disabled {
 
 </div>
 
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script
+  src="https://telegram.org/js/telegram-web-app.js">
+</script>
 
 <script>
-const API_URL = "https://uwin-lucky-wheel.onrender.com";
-const tg = window.Telegram?.WebApp;
-const customerId = tg?.initDataUnsafe?.user?.id;
+
+const API_URL =
+  "https://uwin-lucky-wheel.onrender.com";
+
+const tg =
+  window.Telegram?.WebApp;
+
+const customerId =
+  tg?.initDataUnsafe?.user?.id;
+
+// ==============================
+// PRIZE PROBABILITY
+// ==============================
+
 const prizes = [
-  { name: "10%", weight: 6, index: 0 },
-  { name: "20%", weight: 30, index: 1 },
-  { name: "30%", weight: 22, index: 2 },
-  { name: "40%", weight: 2, index: 3 },
-  { name: "RM3", weight: 5, index: 4 },
-  { name: "RM5", weight: 8, index: 5 },
-  { name: "RM7", weight: 11, index: 6 },
-  { name: "RM9", weight: 16, index: 7 }
+
+  {
+    name: "10%",
+    weight: 6,
+    index: 0
+  },
+
+  {
+    name: "20%",
+    weight: 30,
+    index: 1
+  },
+
+  {
+    name: "30%",
+    weight: 22,
+    index: 2
+  },
+
+  {
+    name: "40%",
+    weight: 2,
+    index: 3
+  },
+
+  {
+    name: "RM3",
+    weight: 5,
+    index: 4
+  },
+
+  {
+    name: "RM5",
+    weight: 8,
+    index: 5
+  },
+
+  {
+    name: "RM7",
+    weight: 11,
+    index: 6
+  },
+
+  {
+    name: "RM9",
+    weight: 16,
+    index: 7
+  }
+
 ];
 
+// ==============================
+// VARIABLES
+// ==============================
+
 let spinning = false;
+
 let currentRotation = 0;
 
+// ==============================
+// CHOOSE PRIZE
+// ==============================
+
 function choosePrize() {
-  const random = Math.random() * 100;
+
+  const random =
+    Math.random() * 100;
+
   let total = 0;
 
-  for (const prize of prizes) {
+  for (
+    const prize of prizes
+  ) {
+
     total += prize.weight;
 
-    if (random < total) {
+    if (
+      random < total
+    ) {
       return prize;
     }
+
   }
 
   return prizes[1];
+
 }
+
+// ==============================
+// CHECK BALANCE
+// ==============================
+
+async function loadBalance() {
+
+  if (!customerId) {
+
+    document
+      .getElementById(
+        "balance"
+      )
+      .innerHTML =
+      "Buka melalui Telegram";
+
+    return;
+  }
+
+  try {
+
+    const response =
+      await fetch(
+        API_URL +
+        "/spins/" +
+        customerId
+      );
+
+    const data =
+      await response.json();
+
+    document
+      .getElementById(
+        "balance"
+      )
+      .innerHTML =
+      "Baki SPIN: " +
+      (data.spins || 0);
+
+  } catch (error) {
+
+    console.error(
+      "BALANCE ERROR:",
+      error
+    );
+
+  }
+
+}
+
+// ==============================
+// SEND RESULT TO BOT
+// ==============================
+
+async function sendResult(
+  prizeName
+) {
+
+  try {
+
+    await fetch(
+      API_URL +
+      "/result/" +
+      customerId,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+
+        body:
+          JSON.stringify({
+            prize:
+              prizeName
+          })
+      }
+    );
+
+  } catch (error) {
+
+    console.error(
+      "RESULT ERROR:",
+      error
+    );
+
+  }
+
+}
+
+// ==============================
+// SPIN WHEEL
+// ==============================
 
 async function spinWheel() {
 
-if (!customerId) {
-  alert("Sila buka Lucky Wheel melalui Telegram.");
-  return;
-}
+  if (!customerId) {
 
-  if (spinning) return;
-const spinCheck = await fetch(API_URL + "/spin/" + customerId, {
-  method: "POST"
-});
+    alert(
+      "Sila buka Lucky Wheel melalui Telegram."
+    );
 
-if (!spinCheck.ok) {
-  alert("❌ Tiada peluang SPIN. Sila topup dahulu.");
-  return;
-}
+    return;
+  }
 
-const spinData = await spinCheck.json();
-  spinning = true;
+  if (spinning) {
+    return;
+  }
 
-  const button = document.getElementById("spinButton");
-  const wheel = document.getElementById("wheel");
-  const result = document.getElementById("result");
+  const button =
+    document.getElementById(
+      "spinButton"
+    );
+
+  const wheel =
+    document.getElementById(
+      "wheel"
+    );
+
+  const result =
+    document.getElementById(
+      "result"
+    );
+
+  // ==========================
+  // DEDUCT 1 SPIN FIRST
+  // ==========================
 
   button.disabled = true;
-  button.innerHTML = "🎡 SEDANG BERPUTAR...";
+
+  button.innerHTML =
+    "⏳ CHECKING...";
+
+  try {
+
+    const spinCheck =
+      await fetch(
+        API_URL +
+        "/spin/" +
+        customerId,
+        {
+          method: "POST"
+        }
+      );
+
+    if (!spinCheck.ok) {
+
+      button.disabled =
+        false;
+
+      button.innerHTML =
+        "🎡 SPIN SEKARANG";
+
+      alert(
+        "❌ Tiada peluang SPIN. Sila topup dahulu."
+      );
+
+      await loadBalance();
+
+      return;
+    }
+
+    const spinData =
+      await spinCheck.json();
+
+    document
+      .getElementById(
+        "balance"
+      )
+      .innerHTML =
+      "Baki SPIN: " +
+      spinData.spins;
+
+  } catch (error) {
+
+    console.error(
+      "SPIN CHECK ERROR:",
+      error
+    );
+
+    button.disabled =
+      false;
+
+    button.innerHTML =
+      "🎡 SPIN SEKARANG";
+
+    alert(
+      "Connection error. Sila cuba lagi."
+    );
+
+    return;
+  }
+
+  // ==========================
+  // START SPIN
+  // ==========================
+
+  spinning = true;
+
+  button.innerHTML =
+    "🎡 SEDANG BERPUTAR...";
 
   result.innerHTML =
     '<div class="result-title">HADIAH ANDA</div>' +
     '<div class="prize">...</div>';
 
-  const prize = choosePrize();
+  const prize =
+    choosePrize();
 
   const segment = 45;
-  const centerAngle = prize.index * segment + segment / 2;
 
-  const extraTurns = 360 * 7;
+  const centerAngle =
+    prize.index *
+    segment +
+    segment / 2;
 
-  const normalizedCurrent = ((currentRotation % 360) + 360) % 360;
-  const targetNormalized = (360 - centerAngle) % 360;
+  const extraTurns =
+    360 * 7;
 
-  let delta = targetNormalized - normalizedCurrent;
+  const normalizedCurrent =
+    (
+      (
+        currentRotation %
+        360
+      ) +
+      360
+    ) %
+    360;
+
+  const targetNormalized =
+    (
+      360 -
+      centerAngle
+    ) %
+    360;
+
+  let delta =
+    targetNormalized -
+    normalizedCurrent;
 
   if (delta < 0) {
     delta += 360;
   }
 
-  currentRotation += extraTurns + delta;
+  currentRotation +=
+    extraTurns +
+    delta;
 
   wheel.style.transform =
-    "rotate(" + currentRotation + "deg)";
+    "rotate(" +
+    currentRotation +
+    "deg)";
 
-  setTimeout(() => {
+  // ==========================
+  // RESULT AFTER SPIN
+  // ==========================
 
-    result.innerHTML =
-      '<div class="result-title">🎉 TAHNIAH! ANDA DAPAT 🎉</div>' +
-      '<div class="prize">' + prize.name + '</div>';
+  setTimeout(
+    async () => {
 
-    button.innerHTML = "🎡 SPIN LAGI";
-    button.disabled = false;
+      result.innerHTML =
+        '<div class="result-title">🎉 TAHNIAH! ANDA MENANG</div>' +
+        '<div class="prize">' +
+        prize.name +
+        "</div>";
 
-    spinning = false;
+      button.innerHTML =
+        "🎡 SPIN LAGI";
 
-    if (window.Telegram && Telegram.WebApp) {
-      Telegram.WebApp.HapticFeedback.notificationOccurred("success");
-    }
+      button.disabled =
+        false;
 
-  }, 5400);
+      spinning = false;
+
+      // Send result back to Telegram Bot
+      await sendResult(
+        prize.name
+      );
+
+      // Refresh remaining spins
+      await loadBalance();
+
+      if (
+        window.Telegram &&
+        Telegram.WebApp
+      ) {
+
+        try {
+
+          Telegram
+            .WebApp
+            .HapticFeedback
+            .notificationOccurred(
+              "success"
+            );
+
+        } catch (error) {}
+
+      }
+
+    },
+    5400
+  );
+
 }
 
-if (window.Telegram && Telegram.WebApp) {
+// ==============================
+// TELEGRAM MINI APP
+// ==============================
+
+if (
+  window.Telegram &&
+  Telegram.WebApp
+) {
+
   Telegram.WebApp.ready();
+
   Telegram.WebApp.expand();
+
 }
+
+// Load remaining SPIN
+loadBalance();
+
 </script>
 
 </body>

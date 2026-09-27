@@ -297,7 +297,7 @@ function choosePrize() {
   return prizes[1];
 }
 
-function spinWheel() {
+async function spinWheel() {
 
 if (!customerId) {
   alert("Sila buka Lucky Wheel melalui Telegram.");
@@ -305,7 +305,16 @@ if (!customerId) {
 }
 
   if (spinning) return;
+const spinCheck = await fetch(API_URL + "/spin/" + customerId, {
+  method: "POST"
+});
 
+if (!spinCheck.ok) {
+  alert("❌ Tiada peluang SPIN. Sila topup dahulu.");
+  return;
+}
+
+const spinData = await spinCheck.json();
   spinning = true;
 
   const button = document.getElementById("spinButton");

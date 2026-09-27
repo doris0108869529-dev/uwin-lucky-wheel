@@ -53,6 +53,18 @@ const ADMINS = [
   6010203542
 ];
 
+// 合法奖项
+const VALID_PRIZES = [
+  "10%",
+  "20%",
+  "30%",
+  "40%",
+  "RM3",
+  "RM5",
+  "RM7",
+  "RM9"
+];
+
 // ==============================
 // EXPRESS
 // ==============================
@@ -104,6 +116,15 @@ async function initDatabase() {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS spin_results (
+      id SERIAL PRIMARY KEY,
+      telegram_id BIGINT NOT NULL,
+      prize VARCHAR(20) NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
   console.log("Database ready!");
 }
 
@@ -130,7 +151,9 @@ app.get("/spins/:id", async (req, res) => {
     res.json({
       spins
     });
+
   } catch (error) {
+
     console.error(
       "GET SPINS ERROR:",
       error
@@ -148,29 +171,37 @@ app.get("/spins/:id", async (req, res) => {
 
 app.post("/spin/:id", async (req, res) => {
   try {
+
     const result = await pool.query(
       `
       UPDATE customer_spins
+
       SET spins = spins - 1
+
       WHERE telegram_id = $1
       AND spins > 0
+
       RETURNING spins
       `,
       [req.params.id]
     );
 
     if (result.rows.length === 0) {
+
       return res.status(403).json({
         success: false,
         spins: 0
       });
+
     }
 
     res.json({
       success: true,
       spins: result.rows[0].spins
     });
+
   } catch (error) {
+
     console.error(
       "SPIN ERROR:",
       error
@@ -183,10 +214,88 @@ app.post("/spin/:id", async (req, res) => {
 });
 
 // ==============================
+// RECEIVE WIN RESULT
+// 顾客转完后，网页会调用这里
+// ==============================
+
+app.post("/result/:id", async (req, res) => {
+  try {
+
+    const customerId =
+      req.params.id;
+
+    const prize =
+      req.body?.prize;
+
+    // 防止乱传不存在的奖项
+    if (
+      !prize ||
+      !VALID_PRIZES.includes(prize)
+    ) {
+
+      return res.status(400).json({
+        success: false,
+        error: "Invalid prize"
+      });
+
+    }
+
+    // 保存中奖记录
+    await pool.query(
+      `
+      INSERT INTO spin_results
+      (
+        telegram_id,
+        prize
+      )
+
+      VALUES ($1, $2)
+      `,
+      [
+        customerId,
+        prize
+      ]
+    );
+
+    // 发中奖结果给顾客
+    await bot.sendMessage(
+      customerId,
+      `🎉 KEPUTUSAN LUCKY WHEEL\n\n🎁 Hadiah anda: ${prize}\n\nSila tunggu admin masukkan hadiah anda.`
+    );
+
+    console.log(
+      "RESULT SENT:",
+      customerId,
+      prize
+    );
+
+    res.json({
+      success: true,
+      prize: prize
+    });
+
+  } catch (error) {
+
+    console.error(
+      "RESULT ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      error: "Result error"
+    });
+  }
+});
+
+// ==============================
 // INLINE MODE
+// 客服输入：
+// @UwinLuckyWheelBot spin
 // ==============================
 
 bot.on("inline_query", async (query) => {
+
   console.log(
     "INLINE QUERY:",
     query.from.id,
@@ -194,9 +303,14 @@ bot.on("inline_query", async (query) => {
   );
 
   try {
-    const adminId = query.from.id;
 
-    if (!ADMINS.includes(adminId)) {
+    const adminId =
+      query.from.id;
+
+    if (
+      !ADMINS.includes(adminId)
+    ) {
+
       await bot.answerInlineQuery(
         query.id,
         [],
@@ -221,6 +335,7 @@ bot.on("inline_query", async (query) => {
         token,
         created_by
       )
+
       VALUES ($1, $2)
       `,
       [
@@ -239,7 +354,8 @@ bot.on("inline_query", async (query) => {
 
         id: grantToken,
 
-        title: "🎡 GIVE 1 SPIN",
+        title:
+          "🎡 GIVE 1 SPIN",
 
         description:
           "Berikan customer 1 peluang Lucky Wheel",
@@ -277,7 +393,9 @@ bot.on("inline_query", async (query) => {
       "INLINE RESULT SENT:",
       adminId
     );
+
   } catch (error) {
+
     console.error(
       "INLINE ERROR:",
       error
@@ -292,14 +410,24 @@ bot.on("inline_query", async (query) => {
 bot.onText(
   /\/start(?:\s+(.+))?/,
   async (msg, match) => {
-    const chatId = msg.chat.id;
-    const startParam = match[1];
+
+    const chatId =
+      msg.chat.id;
+
+    const startParam =
+      match[1];
 
     try {
+
+      // ==========================
+      // CLAIM 1 SPIN
+      // ==========================
+
       if (
         startParam &&
         startParam.startsWith("spin_")
       ) {
+
         const grantToken =
           startParam.substring(5);
 
@@ -307,7 +435,10 @@ bot.onText(
           await pool.connect();
 
         try {
-          await client.query("BEGIN");
+
+          await client.query(
+            "BEGIN"
+          );
 
           const claim =
             await client.query(
@@ -329,7 +460,10 @@ bot.onText(
               ]
             );
 
-          if (claim.rows.length === 0) {
+          if (
+            claim.rows.length === 0
+          ) {
+
             await client.query(
               "ROLLBACK"
             );
@@ -394,16 +528,25 @@ bot.onText(
           );
 
           return;
+
         } catch (error) {
+
           await client.query(
             "ROLLBACK"
           );
 
           throw error;
+
         } finally {
+
           client.release();
+
         }
       }
+
+      // ==========================
+      // NORMAL /START
+      // ==========================
 
       const result =
         await pool.query(
@@ -440,7 +583,9 @@ bot.onText(
           }
         }
       );
+
     } catch (error) {
+
       console.error(
         "START ERROR:",
         error
@@ -456,10 +601,14 @@ bot.onText(
 bot.onText(
   /\/add\s+(\d+)/,
   async (msg, match) => {
+
     const adminId =
       msg.from.id;
 
-    if (!ADMINS.includes(adminId)) {
+    if (
+      !ADMINS.includes(adminId)
+    ) {
+
       await bot.sendMessage(
         msg.chat.id,
         "❌ Anda tidak mempunyai akses."
@@ -469,6 +618,7 @@ bot.onText(
     }
 
     try {
+
       const customerId =
         match[1];
 
@@ -502,7 +652,9 @@ bot.onText(
         msg.chat.id,
         `✅ +1 SPIN\nCustomer ID: ${customerId}\nBaki SPIN: ${balance}`
       );
+
     } catch (error) {
+
       console.error(
         "ADD SPIN ERROR:",
         error
@@ -523,13 +675,17 @@ bot.onText(
 app.post(
   webhookPath,
   (req, res) => {
+
     try {
+
       bot.processUpdate(
         req.body
       );
 
       res.sendStatus(200);
+
     } catch (error) {
+
       console.error(
         "WEBHOOK UPDATE ERROR:",
         error
@@ -542,13 +698,14 @@ app.post(
 
 // ==============================
 // DEBUG BOT
-// 检查 Telegram 是否真的开启 Inline
 // ==============================
 
 app.get(
   "/debug-bot",
   async (req, res) => {
+
     try {
+
       const response =
         await fetch(
           `https://api.telegram.org/bot${BOT_TOKEN}/getMe`
@@ -558,7 +715,8 @@ app.get(
         await response.json();
 
       res.json({
-        ok: data.ok,
+        ok:
+          data.ok,
 
         username:
           data.result?.username,
@@ -567,7 +725,9 @@ app.get(
           data.result
             ?.supports_inline_queries
       });
+
     } catch (error) {
+
       res
         .status(500)
         .json({
@@ -582,11 +742,15 @@ app.get(
 // HEALTH CHECK
 // ==============================
 
-app.get("/", (req, res) => {
-  res.send(
-    "Uwin Lucky Wheel Bot is running!"
-  );
-});
+app.get(
+  "/",
+  (req, res) => {
+
+    res.send(
+      "Uwin Lucky Wheel Bot is running!"
+    );
+  }
+);
 
 // ==============================
 // START SERVER
@@ -595,11 +759,13 @@ app.get("/", (req, res) => {
 app.listen(
   PORT,
   async () => {
+
     console.log(
       `Server running on port ${PORT}`
     );
 
     try {
+
       await initDatabase();
 
       const webhookResponse =
@@ -614,7 +780,8 @@ app.listen(
             },
 
             body: JSON.stringify({
-              url: webhookUrl,
+              url:
+                webhookUrl,
 
               allowed_updates: [
                 "message",
@@ -636,7 +803,10 @@ app.listen(
         webhookResult
       );
 
-      if (!webhookResult.ok) {
+      if (
+        !webhookResult.ok
+      ) {
+
         throw new Error(
           webhookResult.description ||
           "Webhook setup failed"
@@ -665,7 +835,9 @@ app.listen(
       console.log(
         "Webhook ready!"
       );
+
     } catch (error) {
+
       console.error(
         "STARTUP ERROR:",
         error

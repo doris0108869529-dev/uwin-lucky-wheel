@@ -299,6 +299,11 @@ function choosePrize() {
 
 function spinWheel() {
 
+if (!customerId) {
+  alert("Sila buka Lucky Wheel melalui Telegram.");
+  return;
+}
+
   if (spinning) return;
 
   spinning = true;

@@ -110,13 +110,6 @@ bot.on("inline_query", async (query) => {
     const adminId = query.from.id;
 
     // 只有4个客服看得到 GIVE 1 SPIN
-    if (!ADMINS.includes(adminId)) {
-      await bot.answerInlineQuery(query.id, [], {
-        cache_time: 0,
-        is_personal: true
-      });
-      return;
-    }
 
     const grantToken = crypto.randomBytes(18).toString("hex");
 

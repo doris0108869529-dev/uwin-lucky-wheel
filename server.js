@@ -9,9 +9,18 @@ const PORT = process.env.PORT || 3000;
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
 
+// ==============================
+// TELEGRAM BOT
+// 不使用 polling，避免 409 Conflict
+// ==============================
+
 const bot = new TelegramBot(BOT_TOKEN, {
   polling: false
 });
+
+// ==============================
+// DATABASE
+// ==============================
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
@@ -21,7 +30,7 @@ const pool = new Pool({
 });
 
 // ==============================
-// UWIN SETTINGS
+// SETTINGS
 // ==============================
 
 const wheelUrl =
@@ -36,7 +45,7 @@ const webhookPath =
 const webhookUrl =
   renderUrl + webhookPath;
 
-// 可以 GIVE 1 SPIN 的客服 Telegram ID
+// 可以使用 GIVE 1 SPIN 的客服
 const ADMINS = [
   8780423196,
   8551800786,
@@ -75,7 +84,7 @@ app.use((req, res, next) => {
 });
 
 // ==============================
-// DATABASE
+// DATABASE INIT
 // ==============================
 
 async function initDatabase() {
@@ -103,230 +112,205 @@ async function initDatabase() {
 // CHECK SPIN BALANCE
 // ==============================
 
-app.get(
-  "/spins/:id",
-  async (req, res) => {
-    try {
-      const result =
-        await pool.query(
-          `
-          SELECT spins
-          FROM customer_spins
-          WHERE telegram_id = $1
-          `,
-          [req.params.id]
-        );
+app.get("/spins/:id", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT spins
+      FROM customer_spins
+      WHERE telegram_id = $1
+      `,
+      [req.params.id]
+    );
 
-      const spins =
-        result.rows.length > 0
-          ? result.rows[0].spins
-          : 0;
+    const spins =
+      result.rows.length > 0
+        ? result.rows[0].spins
+        : 0;
 
-      res.json({
-        spins
-      });
-    } catch (error) {
-      console.error(
-        "GET SPINS ERROR:",
-        error
-      );
+    res.json({
+      spins
+    });
+  } catch (error) {
+    console.error(
+      "GET SPINS ERROR:",
+      error
+    );
 
-      res.status(500).json({
-        error: "Database error"
-      });
-    }
+    res.status(500).json({
+      error: "Database error"
+    });
   }
-);
+});
 
 // ==============================
 // USE 1 SPIN
 // ==============================
 
-app.post(
-  "/spin/:id",
-  async (req, res) => {
-    try {
-      const result =
-        await pool.query(
-          `
-          UPDATE customer_spins
+app.post("/spin/:id", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      UPDATE customer_spins
 
-          SET spins = spins - 1
+      SET spins = spins - 1
 
-          WHERE telegram_id = $1
-          AND spins > 0
+      WHERE telegram_id = $1
+      AND spins > 0
 
-          RETURNING spins
-          `,
-          [req.params.id]
-        );
+      RETURNING spins
+      `,
+      [req.params.id]
+    );
 
-      if (
-        result.rows.length === 0
-      ) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            spins: 0
-          });
-      }
-
-      res.json({
-        success: true,
-        spins:
-          result.rows[0].spins
-      });
-    } catch (error) {
-      console.error(
-        "SPIN ERROR:",
-        error
-      );
-
-      res.status(500).json({
-        error: "Database error"
+    if (result.rows.length === 0) {
+      return res.status(403).json({
+        success: false,
+        spins: 0
       });
     }
+
+    res.json({
+      success: true,
+      spins: result.rows[0].spins
+    });
+  } catch (error) {
+    console.error(
+      "SPIN ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      error: "Database error"
+    });
   }
-);
+});
 
 // ==============================
 // INLINE MODE
-// 客服在顾客聊天输入
+// 客服输入：
 // @UwinLuckyWheelBot spin
 // ==============================
 
-bot.on(
-  "inline_query",
-  async (query) => {
-    console.log(
-      "INLINE QUERY:",
-      query.from.id,
-      query.query
-    );
+bot.on("inline_query", async (query) => {
+  console.log(
+    "INLINE QUERY:",
+    query.from.id,
+    query.query
+  );
 
-    try {
-      const adminId =
-        query.from.id;
+  try {
+    const adminId = query.from.id;
 
-      if (
-        !ADMINS.includes(adminId)
-      ) {
-        await bot.answerInlineQuery(
-          query.id,
-          [],
-          {
-            cache_time: 0,
-            is_personal: true
-          }
-        );
-
-        return;
-      }
-
-      const grantToken =
-        crypto
-          .randomBytes(18)
-          .toString("hex");
-
-      await pool.query(
-        `
-        INSERT INTO spin_grants
-        (
-          token,
-          created_by
-        )
-
-        VALUES ($1, $2)
-        `,
-        [
-          grantToken,
-          adminId
-        ]
-      );
-
-      const claimUrl =
-        "https://t.me/UwinLuckyWheelBot?start=spin_" +
-        grantToken;
-
-      const results = [
-        {
-          type: "article",
-
-          id: grantToken,
-
-          title:
-            "🎡 GIVE 1 SPIN",
-
-          description:
-            "Berikan customer 1 peluang Lucky Wheel",
-
-          input_message_content: {
-            message_text:
-              "🎁 Anda mendapat 1 peluang SPIN!\n\nTekan butang di bawah untuk claim 👇"
-          },
-
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text:
-                    "🎡 CLAIM 1 SPIN",
-
-                  url: claimUrl
-                }
-              ]
-            ]
-          }
-        }
-      ];
-
+    // 只有指定客服可以使用
+    if (!ADMINS.includes(adminId)) {
       await bot.answerInlineQuery(
         query.id,
-        results,
+        [],
         {
           cache_time: 0,
           is_personal: true
         }
       );
 
-      console.log(
-        "INLINE RESULT SENT:",
-        adminId
-      );
-    } catch (error) {
-      console.error(
-        "INLINE ERROR:",
-        error
-      );
+      return;
     }
+
+    const grantToken =
+      crypto
+        .randomBytes(18)
+        .toString("hex");
+
+    await pool.query(
+      `
+      INSERT INTO spin_grants
+      (
+        token,
+        created_by
+      )
+      VALUES ($1, $2)
+      `,
+      [
+        grantToken,
+        adminId
+      ]
+    );
+
+    const claimUrl =
+      "https://t.me/UwinLuckyWheelBot?start=spin_" +
+      grantToken;
+
+    const results = [
+      {
+        type: "article",
+
+        id: grantToken,
+
+        title: "🎡 GIVE 1 SPIN",
+
+        description:
+          "Berikan customer 1 peluang Lucky Wheel",
+
+        input_message_content: {
+          message_text:
+            "🎁 Anda mendapat 1 peluang SPIN!\n\nTekan butang di bawah untuk claim 👇"
+        },
+
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text:
+                  "🎡 CLAIM 1 SPIN",
+
+                url: claimUrl
+              }
+            ]
+          ]
+        }
+      }
+    ];
+
+    await bot.answerInlineQuery(
+      query.id,
+      results,
+      {
+        cache_time: 0,
+        is_personal: true
+      }
+    );
+
+    console.log(
+      "INLINE RESULT SENT:",
+      adminId
+    );
+  } catch (error) {
+    console.error(
+      "INLINE ERROR:",
+      error
+    );
   }
-);
+});
 
 // ==============================
 // /START
-// 也负责 CLAIM 1 SPIN
+// 同时处理 CLAIM 1 SPIN
 // ==============================
 
 bot.onText(
   /\/start(?:\s+(.+))?/,
   async (msg, match) => {
-    const chatId =
-      msg.chat.id;
-
-    const startParam =
-      match[1];
+    const chatId = msg.chat.id;
+    const startParam = match[1];
 
     try {
-      // =========================
-      // CLAIM SPIN
-      // =========================
+      // ==========================
+      // CLAIM 1 SPIN
+      // ==========================
 
       if (
         startParam &&
-        startParam.startsWith(
-          "spin_"
-        )
+        startParam.startsWith("spin_")
       ) {
         const grantToken =
           startParam.substring(5);
@@ -335,9 +319,7 @@ bot.onText(
           await pool.connect();
 
         try {
-          await client.query(
-            "BEGIN"
-          );
+          await client.query("BEGIN");
 
           const claim =
             await client.query(
@@ -359,9 +341,8 @@ bot.onText(
               ]
             );
 
-          if (
-            claim.rows.length === 0
-          ) {
+          // 已经有人领取过
+          if (claim.rows.length === 0) {
             await client.query(
               "ROLLBACK"
             );
@@ -374,6 +355,7 @@ bot.onText(
             return;
           }
 
+          // 顾客 +1 SPIN
           const result =
             await client.query(
               `
@@ -389,7 +371,6 @@ bot.onText(
               (telegram_id)
 
               DO UPDATE SET
-
               spins =
               customer_spins.spins + 1
 
@@ -438,9 +419,9 @@ bot.onText(
         }
       }
 
-      // =========================
+      // ==========================
       // NORMAL /START
-      // =========================
+      // ==========================
 
       const result =
         await pool.query(
@@ -487,8 +468,8 @@ bot.onText(
 );
 
 // ==============================
-// OLD /ADD
-// 保留做备用
+// /ADD
+// 保留旧方式备用
 // ==============================
 
 bot.onText(
@@ -497,9 +478,7 @@ bot.onText(
     const adminId =
       msg.from.id;
 
-    if (
-      !ADMINS.includes(adminId)
-    ) {
+    if (!ADMINS.includes(adminId)) {
       await bot.sendMessage(
         msg.chat.id,
         "❌ Anda tidak mempunyai akses."
@@ -527,7 +506,6 @@ bot.onText(
           (telegram_id)
 
           DO UPDATE SET
-
           spins =
           customer_spins.spins + 1
 
@@ -559,7 +537,6 @@ bot.onText(
 
 // ==============================
 // TELEGRAM WEBHOOK
-// 代替 POLLING，避免 409
 // ==============================
 
 app.post(
@@ -586,14 +563,11 @@ app.post(
 // RENDER HEALTH CHECK
 // ==============================
 
-app.get(
-  "/",
-  (req, res) => {
-    res.send(
-      "Uwin Lucky Wheel Bot is running!"
-    );
-  }
-);
+app.get("/", (req, res) => {
+  res.send(
+    "Uwin Lucky Wheel Bot is running!"
+  );
+});
 
 // ==============================
 // START SERVER
@@ -607,25 +581,74 @@ app.listen(
     );
 
     try {
+      // 1. Database
       await initDatabase();
 
-      await bot.setWebHook(
-        webhookUrl,
-        {
-          allowed_updates: [
-            "message",
-            "inline_query",
-            "callback_query"
-          ]
-        }
+      // 2. 直接使用 Telegram 官方 API
+      // 设置 webhook + inline_query
+      const webhookResponse =
+        await fetch(
+          `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+
+            body: JSON.stringify({
+              url: webhookUrl,
+
+              allowed_updates: [
+                "message",
+                "inline_query",
+                "callback_query"
+              ],
+
+              drop_pending_updates:
+                true
+            })
+          }
+        );
+
+      const webhookResult =
+        await webhookResponse.json();
+
+      console.log(
+        "SET WEBHOOK:",
+        webhookResult
+      );
+
+      if (!webhookResult.ok) {
+        throw new Error(
+          webhookResult.description ||
+          "Webhook setup failed"
+        );
+      }
+
+      // 3. 再确认 Telegram 实际保存了什么
+      const infoResponse =
+        await fetch(
+          `https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`
+        );
+
+      const infoResult =
+        await infoResponse.json();
+
+      console.log(
+        "WEBHOOK URL:",
+        infoResult.result?.url
+      );
+
+      console.log(
+        "ALLOWED UPDATES:",
+        infoResult.result
+          ?.allowed_updates
       );
 
       console.log(
         "Webhook ready!"
-      );
-
-      console.log(
-        webhookUrl
       );
     } catch (error) {
       console.error(

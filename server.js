@@ -9,9 +9,17 @@ const PORT = process.env.PORT || 3000;
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
 
+// ==============================
+// TELEGRAM BOT
+// ==============================
+
 const bot = new TelegramBot(BOT_TOKEN, {
   polling: false
 });
+
+// ==============================
+// DATABASE
+// ==============================
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
@@ -20,15 +28,23 @@ const pool = new Pool({
   }
 });
 
+// ==============================
+// SETTINGS
+// ==============================
+
 const wheelUrl =
   "https://doris0108869529-dev.github.io/uwin-lucky-wheel/";
 
 const renderUrl =
   "https://uwin-lucky-wheel.onrender.com";
 
-const webhookPath = "/telegram-webhook";
-const webhookUrl = renderUrl + webhookPath;
+const webhookPath =
+  "/telegram-webhook";
 
+const webhookUrl =
+  renderUrl + webhookPath;
+
+// 可以 GIVE 1 SPIN 的客服
 const ADMINS = [
   8780423196,
   8551800786,
@@ -48,11 +64,23 @@ const VALID_PRIZES = [
   "RM9"
 ];
 
+// ==============================
+// EXPRESS
+// ==============================
+
 app.use(express.json());
 
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    "*"
+  );
+
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type"
+  );
+
   res.setHeader(
     "Access-Control-Allow-Methods",
     "GET, POST, OPTIONS"
@@ -64,6 +92,10 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// ==============================
+// DATABASE INIT
+// ==============================
 
 async function initDatabase() {
   await pool.query(`
@@ -79,10 +111,19 @@ async function initDatabase() {
       created_by BIGINT NOT NULL,
       claimed_by BIGINT,
       created_at TIMESTAMP DEFAULT NOW(),
-      claimed_at TIMESTAMP,
-      inline_message_id TEXT,
-      result_sent BOOLEAN NOT NULL DEFAULT FALSE
+      claimed_at TIMESTAMP
     )
+  `);
+
+  await pool.query(`
+    ALTER TABLE spin_grants
+    ADD COLUMN IF NOT EXISTS inline_message_id TEXT
+  `);
+
+  await pool.query(`
+    ALTER TABLE spin_grants
+    ADD COLUMN IF NOT EXISTS result_sent BOOLEAN
+    NOT NULL DEFAULT FALSE
   `);
 
   await pool.query(`
@@ -98,28 +139,36 @@ async function initDatabase() {
 }
 
 // ==============================
-// CHECK CUSTOMER BALANCE
+// CHECK SPIN BALANCE
 // ==============================
 
 app.get("/spins/:id", async (req, res) => {
   try {
-    const result = await pool.query(
-      `
-      SELECT spins
-      FROM customer_spins
-      WHERE telegram_id = $1
-      `,
-      [req.params.id]
-    );
+    const result =
+      await pool.query(
+        `
+        SELECT spins
+        FROM customer_spins
+        WHERE telegram_id = $1
+        `,
+        [req.params.id]
+      );
 
     const spins =
       result.rows.length > 0
         ? result.rows[0].spins
         : 0;
 
-    res.json({ spins });
+    res.json({
+      spins
+    });
+
   } catch (error) {
-    console.error("GET SPINS ERROR:", error);
+    console.error(
+      "GET SPINS ERROR:",
+      error
+    );
+
     res.status(500).json({
       error: "Database error"
     });
@@ -132,16 +181,20 @@ app.get("/spins/:id", async (req, res) => {
 
 app.post("/spin/:id", async (req, res) => {
   try {
-    const result = await pool.query(
-      `
-      UPDATE customer_spins
-      SET spins = spins - 1
-      WHERE telegram_id = $1
-      AND spins > 0
-      RETURNING spins
-      `,
-      [req.params.id]
-    );
+    const result =
+      await pool.query(
+        `
+        UPDATE customer_spins
+
+        SET spins = spins - 1
+
+        WHERE telegram_id = $1
+        AND spins > 0
+
+        RETURNING spins
+        `,
+        [req.params.id]
+      );
 
     if (result.rows.length === 0) {
       return res.status(403).json({
@@ -154,8 +207,13 @@ app.post("/spin/:id", async (req, res) => {
       success: true,
       spins: result.rows[0].spins
     });
+
   } catch (error) {
-    console.error("SPIN ERROR:", error);
+    console.error(
+      "SPIN ERROR:",
+      error
+    );
+
     res.status(500).json({
       error: "Database error"
     });
@@ -164,23 +222,27 @@ app.post("/spin/:id", async (req, res) => {
 
 // ==============================
 // RECEIVE RESULT FROM WHEEL
-// 转完后：
-// 1) 发给顾客和 Bot 的私聊
-// 2) 改掉原本客服和顾客聊天里的那张卡片
 // ==============================
 
 app.post("/result/:id", async (req, res) => {
   try {
-    const customerId = req.params.id;
-    const prize = req.body?.prize;
+    const customerId =
+      req.params.id;
 
-    if (!prize || !VALID_PRIZES.includes(prize)) {
+    const prize =
+      req.body?.prize;
+
+    if (
+      !prize ||
+      !VALID_PRIZES.includes(prize)
+    ) {
       return res.status(400).json({
         success: false,
         error: "Invalid prize"
       });
     }
 
+    // 保存中奖记录
     await pool.query(
       `
       INSERT INTO spin_results
@@ -188,63 +250,86 @@ app.post("/result/:id", async (req, res) => {
         telegram_id,
         prize
       )
+
       VALUES ($1, $2)
       `,
-      [customerId, prize]
+      [
+        customerId,
+        prize
+      ]
     );
 
-    // 找出这个顾客最近一个“已领取但还没发结果”的 grant
-    const grantResult = await pool.query(
-      `
-      SELECT
-        token,
-        inline_message_id
-      FROM spin_grants
-      WHERE claimed_by = $1
-      AND result_sent = FALSE
-      ORDER BY claimed_at ASC
-      LIMIT 1
-      `,
-      [customerId]
-    );
+    // ==========================
+    // 找顾客最新领取的那张
+    // 真正有 inline_message_id 的卡片
+    // ==========================
 
-    if (grantResult.rows.length > 0) {
-      const grant = grantResult.rows[0];
+    const grantResult =
+      await pool.query(
+        `
+        SELECT
+          token,
+          inline_message_id
 
-      // 修改原本客服和顾客聊天中的 inline 卡片
-      if (grant.inline_message_id) {
-        try {
-          await bot.editMessageText(
-            `🎉 KEPUTUSAN LUCKY WHEEL\n\n🎁 Hadiah anda: ${prize}\n\n✅ Sila tunggu admin masukkan hadiah anda.`,
-            {
-              inline_message_id: grant.inline_message_id
-            }
-          );
+        FROM spin_grants
 
-          console.log(
-            "ORIGINAL CHAT UPDATED:",
-            customerId,
-            prize
-          );
-        } catch (editError) {
-          console.error(
-            "EDIT INLINE ERROR:",
-            editError
-          );
-        }
+        WHERE claimed_by = $1
+        AND result_sent = FALSE
+        AND inline_message_id IS NOT NULL
+
+        ORDER BY claimed_at DESC
+
+        LIMIT 1
+        `,
+        [customerId]
+      );
+
+    if (
+      grantResult.rows.length > 0
+    ) {
+      const grant =
+        grantResult.rows[0];
+
+      try {
+        await bot.editMessageText(
+          `🎉 KEPUTUSAN LUCKY WHEEL\n\n🎁 Hadiah anda: ${prize}\n\n✅ Sila tunggu admin masukkan hadiah anda.`,
+          {
+            inline_message_id:
+              grant.inline_message_id
+          }
+        );
+
+        console.log(
+          "ORIGINAL CHAT UPDATED:",
+          customerId,
+          prize
+        );
+
+      } catch (editError) {
+        console.error(
+          "EDIT INLINE ERROR:",
+          editError
+        );
       }
 
       await pool.query(
         `
         UPDATE spin_grants
+
         SET result_sent = TRUE
+
         WHERE token = $1
         `,
         [grant.token]
       );
+    } else {
+      console.log(
+        "NO INLINE MESSAGE FOUND:",
+        customerId
+      );
     }
 
-    // 同时发回顾客和 Bot 的私聊
+    // 同时顾客跟 Bot 私聊也收到一份
     await bot.sendMessage(
       customerId,
       `🎉 KEPUTUSAN LUCKY WHEEL\n\n🎁 Hadiah anda: ${prize}\n\nSila tunggu admin masukkan hadiah anda.`
@@ -260,8 +345,13 @@ app.post("/result/:id", async (req, res) => {
       success: true,
       prize
     });
+
   } catch (error) {
-    console.error("RESULT ERROR:", error);
+    console.error(
+      "RESULT ERROR:",
+      error
+    );
+
     res.status(500).json({
       success: false,
       error: "Result error"
@@ -271,7 +361,7 @@ app.post("/result/:id", async (req, res) => {
 
 // ==============================
 // INLINE QUERY
-// 客服在顾客聊天输入：
+// 客服输入：
 // @UwinLuckyWheelBot spin
 // ==============================
 
@@ -283,9 +373,12 @@ bot.on("inline_query", async (query) => {
   );
 
   try {
-    const adminId = query.from.id;
+    const adminId =
+      query.from.id;
 
-    if (!ADMINS.includes(adminId)) {
+    if (
+      !ADMINS.includes(adminId)
+    ) {
       await bot.answerInlineQuery(
         query.id,
         [],
@@ -294,11 +387,14 @@ bot.on("inline_query", async (query) => {
           is_personal: true
         }
       );
+
       return;
     }
 
     const grantToken =
-      crypto.randomBytes(18).toString("hex");
+      crypto
+        .randomBytes(18)
+        .toString("hex");
 
     await pool.query(
       `
@@ -307,9 +403,13 @@ bot.on("inline_query", async (query) => {
         token,
         created_by
       )
+
       VALUES ($1, $2)
       `,
-      [grantToken, adminId]
+      [
+        grantToken,
+        adminId
+      ]
     );
 
     const claimUrl =
@@ -319,20 +419,29 @@ bot.on("inline_query", async (query) => {
     const results = [
       {
         type: "article",
+
         id: grantToken,
-        title: "🎡 GIVE 1 SPIN",
+
+        title:
+          "🎡 GIVE 1 SPIN",
+
         description:
           "Berikan customer 1 peluang Lucky Wheel",
+
         input_message_content: {
           message_text:
             "🎁 Anda mendapat 1 peluang SPIN!\n\nTekan butang di bawah untuk claim 👇"
         },
+
         reply_markup: {
           inline_keyboard: [
             [
               {
-                text: "🎡 CLAIM 1 SPIN",
-                url: claimUrl
+                text:
+                  "🎡 CLAIM 1 SPIN",
+
+                url:
+                  claimUrl
               }
             ]
           ]
@@ -348,49 +457,61 @@ bot.on("inline_query", async (query) => {
         is_personal: true
       }
     );
+
   } catch (error) {
-    console.error("INLINE ERROR:", error);
+    console.error(
+      "INLINE ERROR:",
+      error
+    );
   }
 });
 
 // ==============================
 // INLINE FEEDBACK
-// 记录真正被发送出去的那张卡片 ID
+// 记录客服真正发出去的卡片
 // ==============================
 
-bot.on("chosen_inline_result", async (chosen) => {
-  try {
-    console.log(
-      "CHOSEN INLINE:",
-      chosen.result_id,
-      chosen.inline_message_id
-    );
-
-    if (
-      chosen.result_id &&
-      chosen.inline_message_id
-    ) {
-      await pool.query(
-        `
-        UPDATE spin_grants
-        SET inline_message_id = $2
-        WHERE token = $1
-        `,
-        [
-          chosen.result_id,
-          chosen.inline_message_id
-        ]
+bot.on(
+  "chosen_inline_result",
+  async (chosen) => {
+    try {
+      console.log(
+        "CHOSEN INLINE:",
+        chosen.result_id,
+        chosen.inline_message_id
       );
 
-      console.log("INLINE MESSAGE SAVED");
+      if (
+        chosen.result_id &&
+        chosen.inline_message_id
+      ) {
+        await pool.query(
+          `
+          UPDATE spin_grants
+
+          SET inline_message_id = $2
+
+          WHERE token = $1
+          `,
+          [
+            chosen.result_id,
+            chosen.inline_message_id
+          ]
+        );
+
+        console.log(
+          "INLINE MESSAGE SAVED"
+        );
+      }
+
+    } catch (error) {
+      console.error(
+        "CHOSEN INLINE ERROR:",
+        error
+      );
     }
-  } catch (error) {
-    console.error(
-      "CHOSEN INLINE ERROR:",
-      error
-    );
   }
-});
+);
 
 // ==============================
 // /START + CLAIM
@@ -399,11 +520,17 @@ bot.on("chosen_inline_result", async (chosen) => {
 bot.onText(
   /\/start(?:\s+(.+))?/,
   async (msg, match) => {
-    const chatId = msg.chat.id;
-    const startParam = match[1];
+    const chatId =
+      msg.chat.id;
+
+    const startParam =
+      match[1];
 
     try {
-      // 顾客点击 CLAIM 1 SPIN
+      // ==========================
+      // CLAIM 1 SPIN
+      // ==========================
+
       if (
         startParam &&
         startParam.startsWith("spin_")
@@ -411,26 +538,40 @@ bot.onText(
         const grantToken =
           startParam.substring(5);
 
-        const client = await pool.connect();
+        const client =
+          await pool.connect();
 
         try {
-          await client.query("BEGIN");
-
-          const claim = await client.query(
-            `
-            UPDATE spin_grants
-            SET
-              claimed_by = $2,
-              claimed_at = NOW()
-            WHERE token = $1
-            AND claimed_by IS NULL
-            RETURNING token
-            `,
-            [grantToken, chatId]
+          await client.query(
+            "BEGIN"
           );
 
-          if (claim.rows.length === 0) {
-            await client.query("ROLLBACK");
+          const claim =
+            await client.query(
+              `
+              UPDATE spin_grants
+
+              SET
+                claimed_by = $2,
+                claimed_at = NOW()
+
+              WHERE token = $1
+              AND claimed_by IS NULL
+
+              RETURNING token
+              `,
+              [
+                grantToken,
+                chatId
+              ]
+            );
+
+          if (
+            claim.rows.length === 0
+          ) {
+            await client.query(
+              "ROLLBACK"
+            );
 
             await bot.sendMessage(
               chatId,
@@ -440,23 +581,32 @@ bot.onText(
             return;
           }
 
-          const result = await client.query(
-            `
-            INSERT INTO customer_spins
-            (
-              telegram_id,
-              spins
-            )
-            VALUES ($1, 1)
-            ON CONFLICT (telegram_id)
-            DO UPDATE SET
-            spins = customer_spins.spins + 1
-            RETURNING spins
-            `,
-            [chatId]
-          );
+          const result =
+            await client.query(
+              `
+              INSERT INTO customer_spins
+              (
+                telegram_id,
+                spins
+              )
 
-          await client.query("COMMIT");
+              VALUES ($1, 1)
+
+              ON CONFLICT
+              (telegram_id)
+
+              DO UPDATE SET
+              spins =
+              customer_spins.spins + 1
+
+              RETURNING spins
+              `,
+              [chatId]
+            );
+
+          await client.query(
+            "COMMIT"
+          );
 
           const balance =
             result.rows[0].spins;
@@ -469,9 +619,12 @@ bot.onText(
                 inline_keyboard: [
                   [
                     {
-                      text: "🎡 SPIN NOW",
+                      text:
+                        "🎡 SPIN NOW",
+
                       web_app: {
-                        url: wheelUrl
+                        url:
+                          wheelUrl
                       }
                     }
                   ]
@@ -481,23 +634,32 @@ bot.onText(
           );
 
           return;
+
         } catch (error) {
-          await client.query("ROLLBACK");
+          await client.query(
+            "ROLLBACK"
+          );
+
           throw error;
+
         } finally {
           client.release();
         }
       }
 
-      // 普通 /start
-      const result = await pool.query(
-        `
-        SELECT spins
-        FROM customer_spins
-        WHERE telegram_id = $1
-        `,
-        [chatId]
-      );
+      // ==========================
+      // NORMAL /START
+      // ==========================
+
+      const result =
+        await pool.query(
+          `
+          SELECT spins
+          FROM customer_spins
+          WHERE telegram_id = $1
+          `,
+          [chatId]
+        );
 
       const balance =
         result.rows.length > 0
@@ -512,9 +674,12 @@ bot.onText(
             inline_keyboard: [
               [
                 {
-                  text: "🎡 SPIN NOW",
+                  text:
+                    "🎡 SPIN NOW",
+
                   web_app: {
-                    url: wheelUrl
+                    url:
+                      wheelUrl
                   }
                 }
               ]
@@ -522,47 +687,63 @@ bot.onText(
           }
         }
       );
+
     } catch (error) {
-      console.error("START ERROR:", error);
+      console.error(
+        "START ERROR:",
+        error
+      );
     }
   }
 );
 
 // ==============================
-// /ADD 备用
+// /ADD BACKUP
 // ==============================
 
 bot.onText(
   /\/add\s+(\d+)/,
   async (msg, match) => {
-    const adminId = msg.from.id;
+    const adminId =
+      msg.from.id;
 
-    if (!ADMINS.includes(adminId)) {
+    if (
+      !ADMINS.includes(adminId)
+    ) {
       await bot.sendMessage(
         msg.chat.id,
         "❌ Anda tidak mempunyai akses."
       );
+
       return;
     }
 
     try {
-      const customerId = match[1];
+      const customerId =
+        match[1];
 
-      const result = await pool.query(
-        `
-        INSERT INTO customer_spins
-        (
-          telegram_id,
-          spins
-        )
-        VALUES ($1, 1)
-        ON CONFLICT (telegram_id)
-        DO UPDATE SET
-        spins = customer_spins.spins + 1
-        RETURNING spins
-        `,
-        [customerId]
-      );
+      const result =
+        await pool.query(
+          `
+          INSERT INTO customer_spins
+          (
+            telegram_id,
+            spins
+          )
+
+          VALUES ($1, 1)
+
+          ON CONFLICT
+          (telegram_id)
+
+          DO UPDATE SET
+          spins =
+          customer_spins.spins + 1
+
+          RETURNING spins
+          `,
+          [customerId]
+        );
 
       const balance =
         result.rows[0].spins;
@@ -571,6 +752,7 @@ bot.onText(
         msg.chat.id,
         `✅ +1 SPIN\nCustomer ID: ${customerId}\nBaki SPIN: ${balance}`
       );
+
     } catch (error) {
       console.error(
         "ADD SPIN ERROR:",
@@ -581,43 +763,66 @@ bot.onText(
 );
 
 // ==============================
-// WEBHOOK
+// TELEGRAM WEBHOOK
 // ==============================
 
-app.post(webhookPath, (req, res) => {
-  try {
-    bot.processUpdate(req.body);
-    res.sendStatus(200);
-  } catch (error) {
-    console.error("WEBHOOK ERROR:", error);
-    res.sendStatus(500);
+app.post(
+  webhookPath,
+  (req, res) => {
+    try {
+      bot.processUpdate(
+        req.body
+      );
+
+      res.sendStatus(200);
+
+    } catch (error) {
+      console.error(
+        "WEBHOOK ERROR:",
+        error
+      );
+
+      res.sendStatus(500);
+    }
   }
-});
+);
 
 // ==============================
 // DEBUG
 // ==============================
 
-app.get("/debug-bot", async (req, res) => {
-  try {
-    const response = await fetch(
-      `https://api.telegram.org/bot${BOT_TOKEN}/getMe`
-    );
+app.get(
+  "/debug-bot",
+  async (req, res) => {
+    try {
+      const response =
+        await fetch(
+          `https://api.telegram.org/bot${BOT_TOKEN}/getMe`
+        );
 
-    const data = await response.json();
+      const data =
+        await response.json();
 
-    res.json({
-      ok: data.ok,
-      username: data.result?.username,
-      supports_inline_queries:
-        data.result?.supports_inline_queries
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: String(error)
-    });
+      res.json({
+        ok:
+          data.ok,
+
+        username:
+          data.result?.username,
+
+        supports_inline_queries:
+          data.result
+            ?.supports_inline_queries
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        error:
+          String(error)
+      });
+    }
   }
-});
+);
 
 // ==============================
 // HEALTH CHECK
@@ -633,60 +838,84 @@ app.get("/", (req, res) => {
 // START SERVER
 // ==============================
 
-app.listen(PORT, async () => {
-  console.log(
-    `Server running on port ${PORT}`
-  );
+app.listen(
+  PORT,
+  async () => {
+    console.log(
+      `Server running on port ${PORT}`
+    );
 
-  try {
-    await initDatabase();
+    try {
+      await initDatabase();
 
-    const webhookResponse = await fetch(
-      `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/json"
-        },
-        body: JSON.stringify({
-          url: webhookUrl,
-          allowed_updates: [
-            "message",
-            "inline_query",
-            "chosen_inline_result",
-            "callback_query"
-          ],
-          drop_pending_updates: true
-        })
+      const webhookResponse =
+        await fetch(
+          `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+
+            body: JSON.stringify({
+              url:
+                webhookUrl,
+
+              allowed_updates: [
+                "message",
+                "inline_query",
+                "chosen_inline_result",
+                "callback_query"
+              ],
+
+              drop_pending_updates:
+                true
+            })
+          }
+        );
+
+      const webhookResult =
+        await webhookResponse.json();
+
+      console.log(
+        "SET WEBHOOK:",
+        webhookResult
+      );
+
+      if (
+        !webhookResult.ok
+      ) {
+        throw new Error(
+          webhookResult.description ||
+          "Webhook setup failed"
+        );
       }
-    );
 
-    const webhookResult =
-      await webhookResponse.json();
+      const infoResponse =
+        await fetch(
+          `https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`
+        );
 
-    console.log(
-      "SET WEBHOOK:",
-      webhookResult
-    );
+      const infoResult =
+        await infoResponse.json();
 
-    const infoResponse = await fetch(
-      `https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`
-    );
+      console.log(
+        "ALLOWED UPDATES:",
+        infoResult.result
+          ?.allowed_updates
+      );
 
-    const infoResult =
-      await infoResponse.json();
+      console.log(
+        "Webhook ready!"
+      );
 
-    console.log(
-      "ALLOWED UPDATES:",
-      infoResult.result?.allowed_updates
-    );
-
-    console.log("Webhook ready!");
-  } catch (error) {
-    console.error(
-      "STARTUP ERROR:",
-      error
-    );
+    } catch (error) {
+      console.error(
+        "STARTUP ERROR:",
+        error
+      );
+    }
   }
-});
+);

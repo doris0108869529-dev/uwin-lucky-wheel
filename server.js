@@ -20,7 +20,36 @@ const ADMINS = [
 
 // 暂时记录每位顾客的 SPIN 次数
 const spins = {};
+app.use(express.json());
 
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  next();
+});
+
+app.get("/spins/:id", (req, res) => {
+  const id = req.params.id;
+  res.json({ spins: spins[id] || 0 });
+});
+
+app.post("/spin/:id", (req, res) => {
+  const id = req.params.id;
+
+  if (!spins[id] || spins[id] <= 0) {
+    return res.status(403).json({
+      success: false,
+      spins: 0
+    });
+  }
+
+  spins[id] -= 1;
+
+  res.json({
+    success: true,
+    spins: spins[id]
+  });
+});
 // 顾客 /start
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;

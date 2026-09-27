@@ -106,6 +106,7 @@ app.post("/spin/:id", async (req, res) => {
 
 // INLINE MODE：客服在顾客聊天输入 @UwinLuckyWheelBot
 bot.on("inline_query", async (query) => {
+  console.log("INLINE QUERY:", query.from.id, query.query);
   try {
     const adminId = query.from.id;
 

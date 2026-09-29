@@ -10,6 +10,16 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
+// 从 Render Environment Variable 读取客服 Telegram ID
+const ADMINS = (process.env.ADMINS || "")
+  .split(",")
+  .map((id) => Number(id.trim()))
+  .filter(
+    (id) =>
+      Number.isSafeInteger(id) &&
+      id > 0
+  );
+
 const bot = new TelegramBot(BOT_TOKEN, {
   polling: false
 });
@@ -32,15 +42,6 @@ const WEBHOOK_PATH =
 
 const WEBHOOK_URL =
   RENDER_URL + WEBHOOK_PATH;
-
-// 可以 GIVE 1 SPIN 的客服
-const ADMINS = [
-  8780423196,
-  8551800786,
-  934555515,
-  8720982986,
-  6010203542
-];
 
 // ==============================
 // 奖项概率（服务器决定）
@@ -109,6 +110,7 @@ async function initDatabase() {
     )
   `);
 
+  // 兼容之前已经建立的旧表
   await pool.query(`
     ALTER TABLE spin_grants
     ADD COLUMN IF NOT EXISTS inline_message_id TEXT
@@ -149,6 +151,7 @@ async function initDatabase() {
 
 // ==============================
 // VERIFY TELEGRAM MINI APP USER
+// 防止别人假冒 Telegram ID
 // ==============================
 
 function verifyTelegramInitData(initData) {
@@ -212,7 +215,8 @@ function verifyTelegramInitData(initData) {
       );
 
     if (
-      supplied.length !== calculated.length ||
+      supplied.length !==
+        calculated.length ||
       !crypto.timingSafeEqual(
         supplied,
         calculated
@@ -221,6 +225,7 @@ function verifyTelegramInitData(initData) {
       return null;
     }
 
+    // Mini App data 最多接受 6 小时
     const authDate =
       Number(
         params.get("auth_date")
@@ -330,6 +335,9 @@ async function syncOriginalChat(
     return true;
   }
 
+  // 不管哪个先到：
+  // inline_message_id 或 prize
+  // 两样都有才真正更新
   if (
     !grant.inline_message_id ||
     !grant.prize
@@ -344,6 +352,7 @@ async function syncOriginalChat(
         inline_message_id:
           grant.inline_message_id,
 
+        // 把 CLAIM 按钮移除
         reply_markup: {
           inline_keyboard: []
         }
@@ -434,7 +443,9 @@ app.post(
         grantResult.rows[0];
 
       if (
-        String(grant.claimed_by) !==
+        String(
+          grant.claimed_by
+        ) !==
         String(user.id)
       ) {
         return res
@@ -475,6 +486,7 @@ app.post(
 
 // ==============================
 // PREPARE SPIN
+// 服务器扣次数 + 决定奖项
 // ==============================
 
 app.post(
@@ -504,7 +516,9 @@ app.post(
       await pool.connect();
 
     try {
-      await client.query("BEGIN");
+      await client.query(
+        "BEGIN"
+      );
 
       const grantResult =
         await client.query(
@@ -520,8 +534,12 @@ app.post(
           [grantToken]
         );
 
-      if (!grantResult.rows.length) {
-        await client.query("ROLLBACK");
+      if (
+        !grantResult.rows.length
+      ) {
+        await client.query(
+          "ROLLBACK"
+        );
 
         return res
           .status(404)
@@ -536,10 +554,14 @@ app.post(
         grantResult.rows[0];
 
       if (
-        String(grant.claimed_by) !==
+        String(
+          grant.claimed_by
+        ) !==
         String(user.id)
       ) {
-        await client.query("ROLLBACK");
+        await client.query(
+          "ROLLBACK"
+        );
 
         return res
           .status(403)
@@ -550,6 +572,8 @@ app.post(
           });
       }
 
+      // 如果网络断线后重试，
+      // 返回同一个奖，不会再扣第二次
       if (grant.prize) {
         const balance =
           await getBalance(
@@ -557,7 +581,9 @@ app.post(
             client
           );
 
-        await client.query("COMMIT");
+        await client.query(
+          "COMMIT"
+        );
 
         return res.json({
           success: true,
@@ -568,6 +594,7 @@ app.post(
         });
       }
 
+      // 真正扣 1 SPIN
       const deduct =
         await client.query(
           `
@@ -580,8 +607,12 @@ app.post(
           [user.id]
         );
 
-      if (!deduct.rows.length) {
-        await client.query("ROLLBACK");
+      if (
+        !deduct.rows.length
+      ) {
+        await client.query(
+          "ROLLBACK"
+        );
 
         return res
           .status(403)
@@ -624,8 +655,12 @@ app.post(
         ]
       );
 
-      await client.query("COMMIT");
+      await client.query(
+        "COMMIT"
+      );
 
+      // 就算顾客转到一半关掉网页，
+      // 约 6 秒后也会尝试把结果写回原聊天
       setTimeout(() => {
         syncOriginalChat(
           grantToken
@@ -669,6 +704,7 @@ app.post(
 
 // ==============================
 // FINISH SPIN
+// 轮盘动画停下后马上更新原聊天
 // ==============================
 
 app.post(
@@ -705,7 +741,9 @@ app.post(
           [grantToken]
         );
 
-      if (!grantResult.rows.length) {
+      if (
+        !grantResult.rows.length
+      ) {
         return res
           .status(404)
           .json({
@@ -717,7 +755,9 @@ app.post(
         grantResult.rows[0];
 
       if (
-        String(grant.claimed_by) !==
+        String(
+          grant.claimed_by
+        ) !==
         String(user.id)
       ) {
         return res
@@ -878,6 +918,7 @@ bot.on(
 
 // ==============================
 // INLINE FEEDBACK
+// 保存“这张特定卡片”的 message ID
 // ==============================
 
 bot.on(
@@ -910,6 +951,9 @@ bot.on(
           "INLINE MESSAGE SAVED"
         );
 
+        // 如果顾客已经转完，
+        // 但 Telegram 的 message ID 比较迟才回来，
+        // 在这里再补更新一次
         await syncOriginalChat(
           chosen.result_id
         );
@@ -951,7 +995,9 @@ bot.onText(
           await pool.connect();
 
         try {
-          await client.query("BEGIN");
+          await client.query(
+            "BEGIN"
+          );
 
           const grantResult =
             await client.query(
@@ -966,8 +1012,12 @@ bot.onText(
               [grantToken]
             );
 
-          if (!grantResult.rows.length) {
-            await client.query("ROLLBACK");
+          if (
+            !grantResult.rows.length
+          ) {
+            await client.query(
+              "ROLLBACK"
+            );
 
             await bot.sendMessage(
               chatId,
@@ -980,6 +1030,7 @@ bot.onText(
           const grant =
             grantResult.rows[0];
 
+          // 第一次 CLAIM
           if (
             grant.claimed_by ===
               null
@@ -1018,10 +1069,14 @@ bot.onText(
             );
 
           } else if (
-            String(grant.claimed_by) !==
+            String(
+              grant.claimed_by
+            ) !==
             String(chatId)
           ) {
-            await client.query("ROLLBACK");
+            await client.query(
+              "ROLLBACK"
+            );
 
             await bot.sendMessage(
               chatId,
@@ -1031,10 +1086,14 @@ bot.onText(
             return;
           }
 
-          await client.query("COMMIT");
+          await client.query(
+            "COMMIT"
+          );
 
         } catch (error) {
-          await client.query("ROLLBACK");
+          await client.query(
+            "ROLLBACK"
+          );
 
           throw error;
 
@@ -1077,9 +1136,11 @@ bot.onText(
         return;
       }
 
+      // 普通 /start
       const balance =
         await getBalance(chatId);
 
+      // 找这个顾客一张还没转的 CLAIM
       const pending =
         await pool.query(
           `
@@ -1140,7 +1201,7 @@ bot.onText(
 );
 
 // ==============================
-// /ADD
+// /ADD 旧方式继续保留备用
 // ==============================
 
 bot.onText(
@@ -1196,7 +1257,7 @@ bot.onText(
 
 // ==============================
 // TELEGRAM WEBHOOK
-// 有正确 secret 才接受
+// 只有 Telegram 带正确 secret 才接受
 // ==============================
 
 app.post(
@@ -1256,6 +1317,10 @@ app.listen(
 
     try {
       await initDatabase();
+
+      console.log(
+        `Admin accounts loaded: ${ADMINS.length}`
+      );
 
       const response =
         await fetch(

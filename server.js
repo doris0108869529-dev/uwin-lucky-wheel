@@ -21,7 +21,7 @@ const pool = new Pool({
 });
 
 const WHEEL_URL =
-  "https://doris0108869529-dev.github.io/uwin-lucky-wheel/";
+  "https://uwin-service-dev.github.io/uwin-lucky-wheel/";
 
 const RENDER_URL =
   "https://uwin-lucky-wheel.onrender.com";
